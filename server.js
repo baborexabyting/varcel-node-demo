@@ -18,7 +18,7 @@ app.post("/api/slash", (req, res) => {
 
   res.json({
     response_type: "in_channel",
-    text: `👋 Hello <@${msg}>! This is your predefined message 🎉`
+    text: `${msg}`
   });
 });
 
