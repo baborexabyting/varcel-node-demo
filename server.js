@@ -8,6 +8,16 @@ const tokenStore = require("./lib/tokenStore");
 const google = require("./lib/google");
 const slack = require("./lib/slack");
 const pages = require("./lib/pages");
+const meetCache = require("./lib/meetCache");
+
+// Pre-warmed FIFO pool of Meet links: serve from cache, refill in background.
+meetCache.configure({
+  target: config.meetCacheSize,
+  create: () => google.createMeetSpace(tokenStore),
+});
+// Kick off the initial fill without blocking boot (also covers serverless
+// cold starts where the listen callback below may not run).
+setImmediate(() => meetCache.start());
 
 const app = express();
 app.locals.sessionSecret = config.sessionSecret;
@@ -71,6 +81,7 @@ app.get("/", requireLogin, (req, res) => {
       account: (tokens && tokens.account_email) || "",
       lastRefreshedAt: (tokens && tokens.last_refreshed_at) || "",
       checked,
+      cache: meetCache.status(),
     })
   );
 });
@@ -106,6 +117,8 @@ app.get("/auth/google/callback", requireLogin, async (req, res) => {
     const tokens = await google.exchangeCode(code);
     tokenStore.save(tokens);
     res.setHeader("Set-Cookie", session.clearStateCookie());
+    // An account was just connected — fill the pre-warmed Meet link pool.
+    meetCache.start();
     res.redirect("/");
   } catch (err) {
     console.error("[auth] token exchange failed:", err.message);
@@ -127,9 +140,23 @@ app.post("/api/slash", async (req, res) => {
     return res.status(401).send("Invalid Slack signature");
   }
 
+  // Fast path: serve a pre-warmed link, then top the pool back up in the
+  // background (fire-and-forget — the response never waits for Google).
+  const cached = meetCache.take();
+  if (cached) {
+    meetCache.refillInBackground();
+    return res.json({
+      response_type: "in_channel",
+      text: `${cached}`,
+    });
+  }
+
+  // Pool empty (still warming, burst traffic, or refill failing) — fall back
+  // to creating on demand, and kick off a refill for the next request.
   let link;
   try {
     link = await google.createMeetSpace(tokenStore);
+    meetCache.refillInBackground();
   } catch (err) {
     const notConnected = err.code === "GOOGLE_NOT_CONNECTED";
     if (!notConnected) console.error("[meet] creating space failed:", err.message);
@@ -158,4 +185,6 @@ app.use((err, req, res, next) => {
 
 app.listen(config.port, () => {
   console.log(`Server started on port ${config.port}`);
+  // Fill the Meet link pool in the background without blocking boot.
+  meetCache.start();
 });
