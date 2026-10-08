@@ -76,7 +76,7 @@ for Vercel Blob / Upstash Redis / a database).
 | `GET /login`, `POST /login`, `GET /logout` | Admin panel auth (credentials from `.env`) |
 | `GET /` | Dashboard: connection status + connect/disconnect buttons |
 | `GET /auth/google`, `GET /auth/google/callback` | OAuth 2 flow (state-cookie protected) |
-| `POST /disconnect` | Delete stored Google tokens |
+| `POST /check-connection` | Verify the Google session by force-refreshing the token |
 | `POST /api/slash` | Slack slash command → fresh Meet link, posted in-channel |
 
 ## Notes

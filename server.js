@@ -64,10 +64,13 @@ app.get("/logout", (req, res) => {
 
 app.get("/", requireLogin, (req, res) => {
   const tokens = tokenStore.load();
+  const checked = req.query.checked === "ok" || req.query.checked === "failed" ? req.query.checked : "";
   res.send(
     pages.dashboard({
       connected: Boolean(tokens && tokens.refresh_token),
       account: (tokens && tokens.account_email) || "",
+      lastRefreshedAt: (tokens && tokens.last_refreshed_at) || "",
+      checked,
     })
   );
 });
@@ -110,9 +113,11 @@ app.get("/auth/google/callback", requireLogin, async (req, res) => {
   }
 });
 
-app.post("/disconnect", requireLogin, (req, res) => {
-  tokenStore.clear();
-  res.redirect("/");
+// Verifies the Google connection by forcing a refresh-token round-trip.
+app.post("/check-connection", requireLogin, async (req, res) => {
+  const result = await google.checkConnection(tokenStore);
+  if (!result.connected) console.warn("[auth] connection check failed:", result.reason);
+  res.redirect(`/?checked=${result.connected ? "ok" : "failed"}`);
 });
 
 // --- Slack slash command ----------------------------------------------------------
