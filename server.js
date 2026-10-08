@@ -124,8 +124,7 @@ app.post("/api/slash", async (req, res) => {
 
   let link;
   try {
-    const accessToken = await google.getValidAccessToken(tokenStore);
-    link = await google.createMeetSpace(accessToken);
+    link = await google.createMeetSpace(tokenStore);
   } catch (err) {
     const notConnected = err.code === "GOOGLE_NOT_CONNECTED";
     if (!notConnected) console.error("[meet] creating space failed:", err.message);

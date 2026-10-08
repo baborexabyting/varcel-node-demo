@@ -42,11 +42,13 @@ Request flow worth knowing:
   issued). The callback validates state, exchanges the code, and persists tokens via
   `tokenStore`.
 - **Slash command**: `/api/slash` verifies the Slack signature (`req.rawBody` is captured
-  via body-parser's `verify` callback for this), then `google.getValidAccessToken()`
-  returns the stored access token or refreshes it (on `invalid_grant` the token store is
-  cleared and the Slack reply asks the admin to reconnect), then `createMeetSpace()`
-  creates the meeting and the link is posted `in_channel`. Errors go back as ephemeral
-  messages so only the invoking user sees them.
+  via body-parser's `verify` callback for this), then `google.createMeetSpace(tokenStore)`
+  creates the meeting. Token handling lives inside it, axios-interceptor style: the stored
+  token is refreshed proactively when near expiry, and if the API call still answers 401
+  it force-refreshes once and replays the request (refresh is single-flight, so concurrent
+  requests share one round-trip). `invalid_grant` clears the token store and the Slack
+  reply asks the admin to reconnect. The link is posted `in_channel`; errors go back as
+  ephemeral messages so only the invoking user sees them.
 
 ## Environment
 
