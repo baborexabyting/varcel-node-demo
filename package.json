@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "",
   "main": "server.js",
+  "engines": {
+    "node": ">=20.12"
+  },
   "author": "Shofiullah Babor",
   "scripts": {
     "start": "node server"
