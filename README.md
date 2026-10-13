@@ -13,7 +13,7 @@ Slack ──POST /api/slash──▶ Express app ──creates──▶ Google M
                               ▲
 Admin ──login (/login)──▶ dashboard (/) ──connect──▶ Google OAuth (/auth/google)
                               │
-                     tokens persisted to data/google-tokens.json
+              refresh token from GOOGLE_REFRESH_TOKEN env, access token in memory
 ```
 
 ## Setup
@@ -47,7 +47,10 @@ npm start          # http://localhost:8080
 ```
 
 Log in, click **Connect Google account**, approve the permissions. The dashboard will
-show the connected account; tokens are saved to `data/google-tokens.json` (gitignored).
+show the connected account **plus the refresh token** — copy it into
+`GOOGLE_REFRESH_TOKEN` (`.env` locally, Vercel dashboard in production) so the
+connection survives restarts. Access tokens live only in process memory and are
+refreshed on demand from that refresh token.
 
 ### 4. Slack slash command
 
@@ -60,14 +63,14 @@ show the connected account; tokens are saved to `data/google-tokens.json` (gitig
 ## Deploying to Vercel
 
 Set the same variables (`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SESSION_SECRET`,
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, optionally
-`SLACK_SIGNING_SECRET`) in Vercel → Project → Settings → Environment Variables.
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`,
+`GOOGLE_REFRESH_TOKEN`, optionally `SLACK_SIGNING_SECRET` and
+`GOOGLE_ACCOUNT_EMAIL`) in Vercel → Project → Settings → Environment Variables.
 
-⚠️ **Token persistence caveat:** Vercel's filesystem is read-only except `/tmp`, and
-`/tmp` is wiped on cold starts. By default tokens go to `/tmp/google-tokens.json` there,
-which means you may need to reconnect the Google account after a cold start. For
-production, point `TOKEN_STORE_PATH` at a durable store (or swap `lib/tokenStore.js`
-for Vercel Blob / Upstash Redis / a database).
+No file writes are used: the refresh token is seeded from `GOOGLE_REFRESH_TOKEN`
+at boot (so cold starts just re-seed from env), and access tokens stay in
+process memory. Flow: connect once locally or on Vercel → copy the refresh token
+shown on the dashboard into the Vercel env var → redeploy/restart.
 
 ## Routes
 
