@@ -82,6 +82,8 @@ app.get("/", requireLogin, (req, res) => {
       lastRefreshedAt: (tokens && tokens.last_refreshed_at) || "",
       checked,
       cache: meetCache.status(),
+      refreshToken: (tokens && tokens.refresh_token) || "",
+      tokenSource: tokenStore.getSource(),
     })
   );
 });
@@ -115,7 +117,13 @@ app.get("/auth/google/callback", requireLogin, async (req, res) => {
 
   try {
     const tokens = await google.exchangeCode(code);
-    tokenStore.save(tokens);
+    tokenStore.save({ ...tokens, source: "oauth" });
+    if (tokens.refresh_token) {
+      console.log(
+        "[auth] Google connected. Copy this refresh token into GOOGLE_REFRESH_TOKEN (.env / Vercel env):",
+        tokens.refresh_token
+      );
+    }
     res.setHeader("Set-Cookie", session.clearStateCookie());
     // An account was just connected — fill the pre-warmed Meet link pool.
     meetCache.start();

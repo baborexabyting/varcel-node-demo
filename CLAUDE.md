@@ -25,7 +25,7 @@ There are no tests or linters configured. Node ≥ 20.12 is required
 server.js            Express wiring: login, dashboard, Google OAuth routes, /api/slash
 lib/config.js        Reads .env (via process.loadEnvFile), exports typed config
 lib/session.js       Stateless HMAC-signed-cookie sessions + cookie helpers + safeEqual
-lib/tokenStore.js    Persists Google tokens to a JSON file (data/ locally, /tmp on Vercel)
+lib/tokenStore.js    In-memory Google tokens, refresh token seeded from GOOGLE_REFRESH_TOKEN env
 lib/google.js        OAuth auth URL, code exchange, token refresh, Meet space creation
 lib/slack.js         Slack request-signature verification (only when SLACK_SIGNING_SECRET set)
 lib/pages.js         Inline-HTML pages (login/dashboard/error), no template engine
@@ -55,16 +55,18 @@ Request flow worth knowing:
 Config comes from `.env` locally (see `.env.example`; `.env` is gitignored) and from the
 Vercel dashboard in production. Key vars: `ADMIN_EMAIL`, `ADMIN_PASSWORD`,
 `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-(must exactly match the redirect URI registered in Google Cloud Console), optional
-`SLACK_SIGNING_SECRET` and `TOKEN_STORE_PATH`.
+(must exactly match the redirect URI registered in Google Cloud Console), `GOOGLE_REFRESH_TOKEN`
+(seeds the in-memory token store at boot), optional `SLACK_SIGNING_SECRET` and
+`GOOGLE_ACCOUNT_EMAIL` (display-only hint).
 
 ## Vercel caveats
 
 - `vercel.json` uses the legacy `builds` + `routes` config: `server.js` is built with
   `@vercel/node` and every path (`/(.*)`) routes into it.
-- Token persistence: Vercel's filesystem is read-only except `/tmp`, which is wiped on
-  cold starts — `tokenStore` falls back to `/tmp/google-tokens.json` there and warns.
-  Durable storage (DB / Blob / Redis) would be needed for production.
+- Token storage is in-memory only (no file writes, Vercel-safe): the refresh
+  token is seeded from `GOOGLE_REFRESH_TOKEN` at boot and access tokens live in
+  process memory, refreshed on demand. After OAuth connect, copy the dashboard's
+  refresh token into the env var so it survives restarts.
 - The Google Meet API must be enabled on the Google Cloud project (setup steps in README.md).
 - Express 5 is used — differs from v4 in routing/error handling (async rejections are
   forwarded to the error handler automatically).
