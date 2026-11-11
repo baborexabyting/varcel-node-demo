@@ -143,6 +143,10 @@ app.post("/check-connection", requireLogin, async (req, res) => {
 
 // --- Slack slash command ----------------------------------------------------------
 
+// Last resort when the pool is empty AND on-demand creation fails (e.g. the
+// per-minute quota is exhausted): always answer with a usable Meet link.
+const FALLBACK_MEET_LINK = "https://meet.google.com/meet/nrt-rxhd-pyz";
+
 app.post("/api/slash", async (req, res) => {
   if (!slack.verifyRequest(req, req.rawBody)) {
     return res.status(401).send("Invalid Slack signature");
@@ -161,20 +165,13 @@ app.post("/api/slash", async (req, res) => {
 
   // Pool empty (still warming, burst traffic, or refill failing) — fall back
   // to creating on demand, and kick off a refill for the next request.
-  let link;
+  let link = FALLBACK_MEET_LINK;
   try {
     link = await google.createMeetSpace(tokenStore);
-    meetCache.refillInBackground();
   } catch (err) {
-    const notConnected = err.code === "GOOGLE_NOT_CONNECTED";
-    if (!notConnected) console.error("[meet] creating space failed:", err.message);
-    return res.json({
-      response_type: "ephemeral",
-      text: notConnected
-        ? "⚠️ No Google account is connected yet — the workspace admin needs to connect one from the app dashboard."
-        : `⚠️ Could not create a Meet link: ${err.message}`,
-    });
+    console.error("[meet] on-demand create failed, serving fallback link:", err.message);
   }
+  meetCache.refillInBackground();
 
   res.json({
     response_type: "in_channel",
